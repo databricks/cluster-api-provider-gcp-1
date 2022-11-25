@@ -132,7 +132,8 @@ type GCPManagedClusterSpec struct {
     Region string `json:"region"`
 
     // ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
-    ControlPlaneEndpoint clusterv1.APIEndpoint `json:”controlplaneEndpoint”`
+	// +optional
+	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
 
     // NetworkSpec encapsulates all things related to the GCP network.
     // +optional
@@ -178,6 +179,9 @@ type GCPManagedControlPlaneSpec struct {
 
 type GCPManagedControlPlaneStatus struct {
     Ready bool `json:"ready"`
+
+	// Conditions specifies the cpnditions for the managed control plane
+	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 
 type GCPManagedMachinePoolSpec struct {
@@ -202,6 +206,12 @@ type GCPManagedMachinePoolSpec struct {
     // ones added by default.
     // +optional
     AdditionalLabels Labels `json:"additionalLabels,omitempty"`
+
+    // ProviderIDList are the provider IDs of instances in the
+    // managed instance group corresponding to the nodegroup represented by this
+    // machine pool
+    // +optional
+    ProviderIDList []string `json:"providerIDList,omitempty"`
 }
 
 type GCPManagedMachinePoolStatus struct {
@@ -210,6 +220,9 @@ type GCPManagedMachinePoolStatus struct {
     // Replicas is the most recently observed number of replicas.
     // +optional
     Replicas int32 `json:"replicas"`
+
+	// Conditions specifies the cpnditions for the managed machine pool
+	Conditions clusterv1.Conditions `json:"conditions,omitempty"`
 }
 ```
 
