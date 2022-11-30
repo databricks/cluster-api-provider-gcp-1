@@ -36,8 +36,6 @@ import (
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-gcp/api/v1alpha3"
 	infrav1alpha4 "sigs.k8s.io/cluster-api-provider-gcp/api/v1alpha4"
 	infrav1beta1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
-	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
-	expcontrollers "sigs.k8s.io/cluster-api-provider-gcp/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-gcp/controllers"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	expcontrollers "sigs.k8s.io/cluster-api-provider-gcp/exp/controllers"
