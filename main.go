@@ -191,6 +191,14 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager) error {
 		setupLog.Error(err, "unable to create controller", "controller", "GCPManagedControlPlane")
 		os.Exit(1)
 	}
+	if err = (&expcontrollers.GCPManagedMachinePoolReconciler{
+		Client:           mgr.GetClient(),
+		ReconcileTimeout: reconcileTimeout,
+		WatchFilterValue: watchFilterValue,
+	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "GCPManagedMachinePool")
+		os.Exit(1)
+	}
 
 	if feature.Gates.Enabled(feature.GKE) {
 		if err := (&expcontrollers.GCPManagedClusterReconciler{
