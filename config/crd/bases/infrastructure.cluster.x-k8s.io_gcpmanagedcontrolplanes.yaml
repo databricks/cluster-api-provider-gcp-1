@@ -23,7 +23,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: GCPManagedControlPlane is the Schema for the gcpmanagedcontrolplanes
-          API
+          API.
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -38,16 +38,16 @@ spec:
           metadata:
             type: object
           spec:
-            description: GCPManagedControlPlaneSpec defines the desired state of GCPManagedControlPlane
+            description: GCPManagedControlPlaneSpec defines the desired state of GCPManagedControlPlane.
             properties:
               controlPlaneVersion:
                 description: ControlPlaneVersion represents the control plane version
-                  of the GKE cluster If not specified, the default version currently
-                  supported by GKE will be used
+                  of the GKE cluster. If not specified, the default version currently
+                  supported by GKE will be used.
                 type: string
               enableAutopilot:
                 description: EnableAutopilot indicates whether to enable autopilot
-                  for this GKE cluster
+                  for this GKE cluster.
                 type: boolean
               endpoint:
                 description: Endpoint represents the endpoint used to communicate
@@ -66,11 +66,11 @@ spec:
                 type: object
               location:
                 description: Location represents the location (region or zone) in
-                  which the GKE cluster will be created
+                  which the GKE cluster will be created.
                 type: string
               releaseChannel:
                 description: ReleaseChannel represents the release channel of the
-                  GKE cluster
+                  GKE cluster.
                 type: string
             required:
             - enableAutopilot
@@ -79,7 +79,7 @@ spec:
             type: object
           status:
             description: GCPManagedControlPlaneStatus defines the observed state of
-              GCPManagedControlPlane
+              GCPManagedControlPlane.
             properties:
               ready:
                 type: boolean
