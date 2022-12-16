@@ -108,7 +108,10 @@ func (r *GCPManagedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	log.V(4).Info("getting control plane %s", controlPlaneRef)
 	if err := r.Get(ctx, controlPlaneRef, controlPlane); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to get control plane ref: %w", err)
+		if !apierrors.IsNotFound(err) || gcpCluster.DeletionTimestamp.IsZero() {
+			return ctrl.Result{}, fmt.Errorf("failed to get control plane ref: %w", err)
+		}
+		controlPlane = nil
 	}
 
 	clusterScope, err := scope.NewManagedClusterScope(ctx, scope.ManagedClusterScopeParams{
