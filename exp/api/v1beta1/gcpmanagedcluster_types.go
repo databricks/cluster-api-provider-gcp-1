@@ -37,7 +37,8 @@ type GCPManagedClusterSpec struct {
 	Region string `json:"region"`
 
 	// ControlPlaneEndpoint represents the endpoint used to communicate with the control plane.
-	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlplaneEndpoint"`
+	// +optional
+	ControlPlaneEndpoint clusterv1.APIEndpoint `json:"controlPlaneEndpoint"`
 
 	// NetworkSpec encapsulates all things related to the GCP network.
 	// +optional

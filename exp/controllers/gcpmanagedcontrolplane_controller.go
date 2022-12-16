@@ -28,6 +28,7 @@ import (
 	"sigs.k8s.io/cluster-api-provider-gcp/util/reconciler"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
 	"sigs.k8s.io/cluster-api/util"
+	"sigs.k8s.io/cluster-api/util/annotations"
 	"sigs.k8s.io/cluster-api/util/conditions"
 	"sigs.k8s.io/cluster-api/util/predicates"
 	"sigs.k8s.io/cluster-api/util/record"
@@ -100,19 +101,31 @@ func (r *GCPManagedControlPlaneReconciler) Reconcile(ctx context.Context, req ct
 		log.Error(err, "Failed to retrieve owner Cluster from the API Server")
 		return ctrl.Result{}, err
 	}
-	//if cluster == nil {
-	//	log.Info("Cluster Controller has not yet set OwnerRef")
-	//	return ctrl.Result{}, nil
-	//}
+	if cluster == nil {
+		log.Info("Cluster Controller has not yet set OwnerRef")
+		return ctrl.Result{}, nil
+	}
 
-	//if annotations.IsPaused(cluster, gcpManagedControlPlane) {
-	//	log.Info("Reconciliation is paused for this object")
-	//	return ctrl.Result{}, nil
-	//}
+	if annotations.IsPaused(cluster, gcpManagedControlPlane) {
+		log.Info("Reconciliation is paused for this object")
+		return ctrl.Result{}, nil
+	}
+
+	// Get the managed cluster
+	managedCluster := &infrav1exp.GCPManagedCluster{}
+	key := client.ObjectKey{
+		Namespace: gcpManagedControlPlane.Namespace,
+		Name:      cluster.Spec.InfrastructureRef.Name,
+	}
+	if err := r.Client.Get(ctx, key, managedCluster); err != nil || managedCluster == nil {
+		log.Error(err, "Failed to retrieve GCPManagedCluster from the API Server")
+		return ctrl.Result{}, err
+	}
 
 	managedControlPlaneScope, err := scope.NewManagedControlPlaneScope(scope.ManagedControlPlaneScopeParams{
 		Client:     r.Client,
 		Cluster:    cluster,
+		GCPManagedCluster: managedCluster,
 		GCPManagedControlPlane: gcpManagedControlPlane,
 	})
 	if err != nil {
@@ -142,6 +155,11 @@ func (r *GCPManagedControlPlaneReconciler) reconcile(ctx context.Context, manage
 	controllerutil.AddFinalizer(managedControlPlaneScope.GCPManagedControlPlane, infrav1exp.ManagedControlPlaneFinalizer)
 	if err := managedControlPlaneScope.PatchObject(); err != nil {
 		return ctrl.Result{}, err
+	}
+
+	if !managedControlPlaneScope.GCPManagedCluster.Status.Ready {
+		log.Info("GCPManagedCluster not ready yet, retry later")
+		return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
 	}
 
 	reconcilers := []cloud.Reconciler{

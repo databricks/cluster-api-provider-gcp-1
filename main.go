@@ -36,7 +36,6 @@ import (
 	infrav1alpha3 "sigs.k8s.io/cluster-api-provider-gcp/api/v1alpha3"
 	infrav1alpha4 "sigs.k8s.io/cluster-api-provider-gcp/api/v1alpha4"
 	infrav1beta1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
-	"sigs.k8s.io/cluster-api-provider-gcp/controllers"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	expcontrollers "sigs.k8s.io/cluster-api-provider-gcp/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-gcp/feature"
@@ -171,36 +170,20 @@ func main() {
 }
 
 func setupReconcilers(ctx context.Context, mgr ctrl.Manager) error {
-	if err := (&controllers.GCPMachineReconciler{
-		Client:           mgr.GetClient(),
-		ReconcileTimeout: reconcileTimeout,
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpMachineConcurrency}); err != nil {
-		return fmt.Errorf("setting up GCPMachine controller: %w", err)
-	}
-	if err := (&controllers.GCPClusterReconciler{
-		Client:           mgr.GetClient(),
-		ReconcileTimeout: reconcileTimeout,
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
-		return fmt.Errorf("setting up GCPCluster controller: %w", err)
-	}
-	if err = (&expcontrollers.GCPManagedControlPlaneReconciler{
-		Client:           mgr.GetClient(),
-		ReconcileTimeout: reconcileTimeout,
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "GCPManagedControlPlane")
-		os.Exit(1)
-	}
-	if err = (&expcontrollers.GCPManagedMachinePoolReconciler{
-		Client:           mgr.GetClient(),
-		ReconcileTimeout: reconcileTimeout,
-		WatchFilterValue: watchFilterValue,
-	}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "GCPManagedMachinePool")
-		os.Exit(1)
-	}
+	//if err := (&controllers.GCPMachineReconciler{
+	//	Client:           mgr.GetClient(),
+	//	ReconcileTimeout: reconcileTimeout,
+	//	WatchFilterValue: watchFilterValue,
+	//}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpMachineConcurrency}); err != nil {
+	//	return fmt.Errorf("setting up GCPMachine controller: %w", err)
+	//}
+	//if err := (&controllers.GCPClusterReconciler{
+	//	Client:           mgr.GetClient(),
+	//	ReconcileTimeout: reconcileTimeout,
+	//	WatchFilterValue: watchFilterValue,
+	//}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+	//	return fmt.Errorf("setting up GCPCluster controller: %w", err)
+	//}
 
 	if feature.Gates.Enabled(feature.GKE) {
 		if err := (&expcontrollers.GCPManagedClusterReconciler{
@@ -210,8 +193,22 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager) error {
 		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
 			return fmt.Errorf("setting up GCPManagedCluster controller: %w", err)
 		}
-
-		//TODO: add other controllers
+		if err := (&expcontrollers.GCPManagedControlPlaneReconciler{
+			Client:           mgr.GetClient(),
+			ReconcileTimeout: reconcileTimeout,
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "GCPManagedControlPlane")
+			os.Exit(1)
+		}
+		if err := (&expcontrollers.GCPManagedMachinePoolReconciler{
+			Client:           mgr.GetClient(),
+			ReconcileTimeout: reconcileTimeout,
+			WatchFilterValue: watchFilterValue,
+		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+			setupLog.Error(err, "unable to create controller", "controller", "GCPManagedMachinePool")
+			os.Exit(1)
+		}
 	}
 
 	return nil
@@ -242,7 +239,7 @@ func setupWebhooks(mgr ctrl.Manager) error {
 			return fmt.Errorf("setting up GCPManagedMachinePool webhook: %w", err)
 		}
 	}
-	if err = (&infrav1exp.GCPManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
+	if err := (&infrav1exp.GCPManagedControlPlane{}).SetupWebhookWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create webhook", "webhook", "GCPManagedControlPlane")
 		os.Exit(1)
 	}

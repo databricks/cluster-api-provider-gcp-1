@@ -35,15 +35,19 @@ type ManagedControlPlaneScopeParams struct {
 	ManagedClusterClient *container.ClusterManagerClient
 	Client     client.Client
 	Cluster    *clusterv1.Cluster
+	GCPManagedCluster *infrav1exp.GCPManagedCluster
 	GCPManagedControlPlane *infrav1exp.GCPManagedControlPlane
 }
 
 // NewManagedControlPlaneScope creates a new Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
 func NewManagedControlPlaneScope(params ManagedControlPlaneScopeParams) (*ManagedControlPlaneScope, error) {
-	//if params.Cluster == nil {
-	//	return nil, errors.New("failed to generate new scope from nil Cluster")
-	//}
+	if params.Cluster == nil {
+		return nil, errors.New("failed to generate new scope from nil Cluster")
+	}
+	if params.GCPManagedCluster == nil {
+		return nil, errors.New("failed to generate new scope from nil GCPManagedCluster")
+	}
 	if params.GCPManagedControlPlane == nil {
 		return nil, errors.New("failed to generate new scope from nil GCPManagedControlPlane")
 	}
@@ -65,6 +69,7 @@ func NewManagedControlPlaneScope(params ManagedControlPlaneScopeParams) (*Manage
 	return &ManagedControlPlaneScope{
 		client:      params.Client,
 		Cluster:     params.Cluster,
+		GCPManagedCluster: params.GCPManagedCluster,
 		GCPManagedControlPlane:  params.GCPManagedControlPlane,
 		mcClient: params.ManagedClusterClient,
 		patchHelper: helper,
@@ -77,6 +82,7 @@ type ManagedControlPlaneScope struct {
 	patchHelper *patch.Helper
 
 	Cluster    *clusterv1.Cluster
+	GCPManagedCluster *infrav1exp.GCPManagedCluster
 	GCPManagedControlPlane *infrav1exp.GCPManagedControlPlane
 	mcClient *container.ClusterManagerClient
 

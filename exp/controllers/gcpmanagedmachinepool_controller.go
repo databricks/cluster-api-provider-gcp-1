@@ -20,7 +20,9 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
+	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -313,6 +315,14 @@ func (r *GCPManagedMachinePoolReconciler) reconcile(ctx context.Context, managed
 
 	for _, r := range reconcilers {
 		if err := r.Reconcile(ctx); err != nil {
+			var e *apierror.APIError
+			if ok := errors.As(err, &e); ok {
+				if e.GRPCStatus().Code() == codes.FailedPrecondition {
+					log.Info("Cannot perform update when there's other operation, retry later")
+					return ctrl.Result{RequeueAfter: 2 * time.Minute}, nil
+				}
+			}
+
 			log.Error(err, "Reconcile error")
 			record.Warnf(managedMachinePoolScope.GCPManagedMachinePool, "GCPManagedMachinePoolReconcile", "Reconcile error - %v", err)
 			return ctrl.Result{}, err

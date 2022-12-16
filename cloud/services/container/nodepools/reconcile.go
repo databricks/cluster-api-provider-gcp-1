@@ -180,15 +180,12 @@ func (s *Service) describeNodePool(ctx context.Context) (*containerpb.NodePool, 
 }
 
 func (s *Service) createNodePool(ctx context.Context) error {
-	log := log.FromContext(ctx)
-
 	createNodePoolRequest := &containerpb.CreateNodePoolRequest{
 		NodePool: scope.ConvertToSdkNodePool(*s.scope.GCPManagedMachinePool),
 		Parent: s.scope.NodePoolLocation(),
 	}
 	_, err := s.scope.ManagedMachinePoolClient().CreateNodePool(ctx, createNodePoolRequest)
 	if err != nil {
-		log.Error(err, "Error creating GKE node pool", "name", s.scope.GCPManagedMachinePool.Name)
 		return err
 	}
 
@@ -196,11 +193,8 @@ func (s *Service) createNodePool(ctx context.Context) error {
 }
 
 func (s *Service) updateNodePoolVersionOrImage(ctx context.Context, updateNodePoolRequest containerpb.UpdateNodePoolRequest) error {
-	log := log.FromContext(ctx)
-
 	_, err := s.scope.ManagedMachinePoolClient().UpdateNodePool(ctx, &updateNodePoolRequest)
 	if err != nil {
-		log.Error(err, "Error updating GKE node pool image/version", "name", s.scope.GCPManagedMachinePool.Name)
 		return err
 	}
 
@@ -208,11 +202,8 @@ func (s *Service) updateNodePoolVersionOrImage(ctx context.Context, updateNodePo
 }
 
 func (s *Service) updateNodePoolSize(ctx context.Context, setNodePoolSizeRequest containerpb.SetNodePoolSizeRequest) error {
-	log := log.FromContext(ctx)
-
 	_, err := s.scope.ManagedMachinePoolClient().SetNodePoolSize(ctx, &setNodePoolSizeRequest)
 	if err != nil {
-		log.Error(err, "Error updating GKE node pool size", "name", s.scope.GCPManagedMachinePool.Name)
 		return err
 	}
 
@@ -220,14 +211,11 @@ func (s *Service) updateNodePoolSize(ctx context.Context, setNodePoolSizeRequest
 }
 
 func (s *Service) deleteNodePool(ctx context.Context) error {
-	log := log.FromContext(ctx)
-
 	deleteNodePoolRequest := &containerpb.DeleteNodePoolRequest{
 		Name: s.scope.NodePoolFullName(),
 	}
 	_, err := s.scope.ManagedMachinePoolClient().DeleteNodePool(ctx, deleteNodePoolRequest)
 	if err != nil {
-		log.Error(err, "Error deleting GKE node pool", "name", s.scope.GCPManagedControlPlane.Name)
 		return err
 	}
 

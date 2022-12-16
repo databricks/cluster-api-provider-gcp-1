@@ -186,6 +186,7 @@ func (s *Service) createCluster(ctx context.Context) error {
 	nodePools, _ := s.scope.GetAllNodePools()
 	cluster := &containerpb.Cluster{
 		Name: s.scope.GCPManagedControlPlane.Name,
+		Network: *s.scope.GCPManagedCluster.Spec.Network.Name,
 		Autopilot: &containerpb.Autopilot{
 			Enabled: false,
 		},

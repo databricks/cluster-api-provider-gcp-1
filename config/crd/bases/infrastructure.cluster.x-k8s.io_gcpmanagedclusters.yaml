@@ -64,7 +64,7 @@ spec:
                   GCP resources managed by the GCP provider, in addition to the ones
                   added by default.
                 type: object
-              controlplaneEndpoint:
+              controlPlaneEndpoint:
                 description: ControlPlaneEndpoint represents the endpoint used to
                   communicate with the control plane.
                 properties:
@@ -188,7 +188,6 @@ spec:
                 description: The GCP Region the cluster lives in.
                 type: string
             required:
-            - controlplaneEndpoint
             - project
             - region
             type: object

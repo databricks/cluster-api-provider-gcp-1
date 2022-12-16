@@ -225,6 +225,11 @@ func (r *GCPManagedClusterReconciler) reconcileDelete(ctx context.Context, clust
 	log := log.FromContext(ctx)
 	log.Info("Reconciling Delete GCPManagedCluster")
 
+	if clusterScope.GCPManagedControlPlane != nil {
+		log.Info("GCPManagedControlPlane not deleted yet, retry later")
+		return ctrl.Result{RequeueAfter: 5 * time.Minute}, nil
+	}
+
 	reconcilers := []cloud.Reconciler{
 		subnets.New(clusterScope),
 		networks.New(clusterScope),

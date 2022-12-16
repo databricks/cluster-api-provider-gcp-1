@@ -42,9 +42,9 @@ type ManagedMachinePoolScopeParams struct {
 // NewManagedMachinePoolScope creates a new Scope from the supplied parameters.
 // This is meant to be called for each reconcile iteration.
 func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedMachinePoolScope, error) {
-	//if params.Cluster == nil {
-	//	return nil, errors.New("failed to generate new scope from nil Cluster")
-	//}
+	if params.Cluster == nil {
+		return nil, errors.New("failed to generate new scope from nil Cluster")
+	}
 	if params.GCPManagedControlPlane == nil {
 		return nil, errors.New("failed to generate new scope from nil GCPManagedControlPlane")
 	}
