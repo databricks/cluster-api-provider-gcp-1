@@ -99,6 +99,13 @@ spec:
                   If not specified, the GKE cluster control plane version will be
                   used.
                 type: string
+              providerIDList:
+                description: ProviderIDList are the provider IDs of instances in the
+                  autoscaling group corresponding to the nodegroup represented by
+                  this machine pool
+                items:
+                  type: string
+                type: array
             required:
             - nodeCount
             type: object

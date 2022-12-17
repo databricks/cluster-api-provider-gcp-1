@@ -19,8 +19,11 @@ package nodepools
 import (
 	"cloud.google.com/go/container/apiv1/containerpb"
 	"context"
+	"fmt"
 	"github.com/googleapis/gax-go/v2/apierror"
 	"github.com/pkg/errors"
+	"google.golang.org/api/iterator"
+	computepb "google.golang.org/genproto/googleapis/cloud/compute/v1"
 	"google.golang.org/grpc/codes"
 	"reflect"
 	"sigs.k8s.io/cluster-api-provider-gcp/cloud/scope"
@@ -55,6 +58,16 @@ func (s *Service) Reconcile(ctx context.Context) error {
 		conditions.MarkTrue(s.scope.ConditionSetter(), infrav1exp.GKEMachinePoolCreatingCondition)
 		return nil
 	}
+
+	instances, err := s.getInstances(ctx, nodePool)
+	if err != nil {
+		return err
+	}
+	providerIDList := []string{}
+	for _, instance := range instances {
+		providerIDList = append(providerIDList, *instance.Instance)
+	}
+	s.scope.GCPManagedMachinePool.Spec.ProviderIDList = providerIDList
 
 	switch nodePool.Status {
 	case containerpb.NodePool_PROVISIONING:
@@ -177,6 +190,35 @@ func (s *Service) describeNodePool(ctx context.Context) (*containerpb.NodePool, 
 	}
 
 	return nodePool, nil
+}
+
+func (s *Service) getInstances(ctx context.Context, nodePool *containerpb.NodePool) ([]*computepb.ManagedInstance, error) {
+	instances := []*computepb.ManagedInstance{}
+
+	for _, url := range nodePool.InstanceGroupUrls {
+		project, zone, mig := scope.ParseInstanceGroupUrl(url)
+		if mig == "" {
+			return nil, errors.New(fmt.Sprintf("fail to parse instance group url %s", url))
+		}
+		listManagedInstancesRequest := &computepb.ListManagedInstancesInstanceGroupManagersRequest{
+			InstanceGroupManager: mig,
+			Project: project,
+			Zone: zone,
+		}
+		iter := s.scope.InstanceGroupManagersClient().ListManagedInstances(ctx, listManagedInstancesRequest)
+		for {
+			resp, err := iter.Next()
+			if err == iterator.Done {
+				break
+			}
+			if err != nil {
+				return nil, err
+			}
+			instances = append(instances, resp)
+		}
+	}
+
+	return instances, nil
 }
 
 func (s *Service) createNodePool(ctx context.Context) error {

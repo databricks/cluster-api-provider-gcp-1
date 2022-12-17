@@ -51,6 +51,11 @@ type GCPManagedMachinePoolSpec struct {
 	// ones added by default.
 	// +optional
 	AdditionalLabels infrav1.Labels `json:"additionalLabels,omitempty"`
+	// ProviderIDList are the provider IDs of instances in the
+	// autoscaling group corresponding to the nodegroup represented by this
+	// machine pool
+	// +optional
+	ProviderIDList []string `json:"providerIDList,omitempty"`
 }
 
 // GCPManagedMachinePoolStatus defines the observed state of GCPManagedMachinePool.

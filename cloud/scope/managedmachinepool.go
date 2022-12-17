@@ -17,12 +17,14 @@ limitations under the License.
 package scope
 
 import (
-	"cloud.google.com/go/container/apiv1/containerpb"
 	"context"
 	"fmt"
 	"sigs.k8s.io/cluster-api/util/conditions"
+	"strings"
 
+	"cloud.google.com/go/compute/apiv1"
 	"cloud.google.com/go/container/apiv1"
+	"cloud.google.com/go/container/apiv1/containerpb"
 	"github.com/pkg/errors"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -33,6 +35,7 @@ import (
 // ManagedMachinePoolScopeParams defines the input parameters used to create a new Scope.
 type ManagedMachinePoolScopeParams struct {
 	ManagedClusterClient *container.ClusterManagerClient
+	InstanceGroupManagersClient *compute.InstanceGroupManagersClient
 	Client     client.Client
 	Cluster    *clusterv1.Cluster
 	GCPManagedControlPlane *infrav1exp.GCPManagedControlPlane
@@ -57,8 +60,15 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 		if err != nil {
 			return nil, errors.Errorf("failed to create gcp managed cluster client: %v", err)
 		}
-
 		params.ManagedClusterClient = managedClusterClient
+	}
+
+	if params.InstanceGroupManagersClient == nil {
+		instanceGroupManagersClient, err := compute.NewInstanceGroupManagersRESTClient(context.TODO())
+		if err != nil {
+			return nil, errors.Errorf("failed to create gcp instance group managers client: %v", err)
+		}
+		params.InstanceGroupManagersClient = instanceGroupManagersClient
 	}
 
 	helper, err := patch.NewHelper(params.GCPManagedMachinePool, params.Client)
@@ -72,6 +82,7 @@ func NewManagedMachinePoolScope(params ManagedMachinePoolScopeParams) (*ManagedM
 		GCPManagedControlPlane: params.GCPManagedControlPlane,
 		GCPManagedMachinePool:  params.GCPManagedMachinePool,
 		mcClient: params.ManagedClusterClient,
+		migClient: params.InstanceGroupManagersClient,
 		patchHelper: helper,
 	}, nil
 }
@@ -85,6 +96,7 @@ type ManagedMachinePoolScope struct {
 	GCPManagedControlPlane *infrav1exp.GCPManagedControlPlane
 	GCPManagedMachinePool *infrav1exp.GCPManagedMachinePool
 	mcClient *container.ClusterManagerClient
+	migClient *compute.InstanceGroupManagersClient
 }
 
 // PatchObject persists the managed control plane configuration and status.
@@ -112,6 +124,18 @@ func (s *ManagedMachinePoolScope) ConditionSetter() conditions.Setter {
 
 func (s *ManagedMachinePoolScope) ManagedMachinePoolClient() *container.ClusterManagerClient {
 	return s.mcClient
+}
+
+func (s *ManagedMachinePoolScope) InstanceGroupManagersClient() *compute.InstanceGroupManagersClient {
+	return s.migClient
+}
+
+func ParseInstanceGroupUrl(url string) (project string, zone string, mig string) {
+	parts := strings.Split(url, "/")
+	if len(parts) < 11 {
+		return "", "", ""
+	}
+	return parts[6], parts[8], parts[10]
 }
 
 func ConvertToSdkNodePool(nodePool infrav1exp.GCPManagedMachinePool) *containerpb.NodePool {
