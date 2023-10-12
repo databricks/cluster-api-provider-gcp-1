@@ -111,7 +111,6 @@ func (s *Service) Reconcile(ctx context.Context) (ctrl.Result, error) {
 		conditions.MarkTrue(s.scope.ConditionSetter(), infrav1exp.GKEControlPlaneUpdatingCondition)
 		s.scope.GCPManagedControlPlane.Status.Initialized = true
 		s.scope.GCPManagedControlPlane.Status.Ready = true
-		return ctrl.Result{RequeueAfter: reconciler.DefaultRetryTime}, nil
 	case containerpb.Cluster_STOPPING:
 		log.Info("Cluster stopping in progress")
 		conditions.MarkFalse(s.scope.ConditionSetter(), clusterv1.ReadyCondition, infrav1exp.GKEControlPlaneDeletingReason, clusterv1.ConditionSeverityInfo, "")
@@ -138,6 +137,23 @@ func (s *Service) Reconcile(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{}, statusErr
 	}
 
+	// Reconcile kubeconfig
+	err = s.reconcileKubeconfig(ctx, cluster, &log)
+	if err != nil {
+		log.Error(err, "Failed to reconcile CAPI kubeconfig")
+		return ctrl.Result{}, err
+	}
+	err = s.reconcileAdditionalKubeconfigs(ctx, cluster, &log)
+	if err != nil {
+		log.Error(err, "Failed to reconcile additional kubeconfig")
+		return ctrl.Result{}, err
+	}
+
+	if cluster.Status == containerpb.Cluster_RECONCILING {
+		log.Info("Cluster reconciling in progress, requeue")
+		return ctrl.Result{RequeueAfter: reconciler.DefaultRetryTime}, nil
+	}
+
 	// Check for cluster diffs and update
 	isUpdating, err := s.checkDiffAndUpdateCluster(ctx, cluster, &log)
 	if err != nil {
@@ -151,24 +167,11 @@ func (s *Service) Reconcile(ctx context.Context) (ctrl.Result, error) {
 		return ctrl.Result{RequeueAfter: reconciler.DefaultRetryTime}, nil
 	}
 
-	conditions.MarkFalse(s.scope.ConditionSetter(), infrav1exp.GKEControlPlaneUpdatingCondition, infrav1exp.GKEControlPlaneUpdatedReason, clusterv1.ConditionSeverityInfo, "")
-
-	// Reconcile kubeconfig
-	err = s.reconcileKubeconfig(ctx, cluster, &log)
-	if err != nil {
-		log.Error(err, "Failed to reconcile CAPI kubeconfig")
-		return ctrl.Result{}, err
-	}
-	err = s.reconcileAdditionalKubeconfigs(ctx, cluster, &log)
-	if err != nil {
-		log.Error(err, "Failed to reconcile additional kubeconfig")
-		return ctrl.Result{}, err
-	}
-
 	s.scope.SetEndpoint(cluster.Endpoint)
 	conditions.MarkTrue(s.scope.ConditionSetter(), clusterv1.ReadyCondition)
 	conditions.MarkTrue(s.scope.ConditionSetter(), infrav1exp.GKEControlPlaneReadyCondition)
 	conditions.MarkFalse(s.scope.ConditionSetter(), infrav1exp.GKEControlPlaneCreatingCondition, infrav1exp.GKEControlPlaneCreatedReason, clusterv1.ConditionSeverityInfo, "")
+	conditions.MarkFalse(s.scope.ConditionSetter(), infrav1exp.GKEControlPlaneUpdatingCondition, infrav1exp.GKEControlPlaneUpdatedReason, clusterv1.ConditionSeverityInfo, "")
 	s.scope.GCPManagedControlPlane.Status.Ready = true
 	s.scope.GCPManagedControlPlane.Status.Initialized = true
 
@@ -501,8 +504,8 @@ func (s *Service) checkDiffAndPrepareUpdateMasterVersion(existingCluster *contai
 	clusterUpdate := containerpb.ClusterUpdate{}
 	// Master version
 	if s.scope.GCPManagedControlPlane.Spec.ControlPlaneVersion != nil {
-		desiredMasterVersion := *s.scope.GCPManagedControlPlane.Spec.ControlPlaneVersion
-		if desiredMasterVersion != existingCluster.InitialClusterVersion {
+		desiredMasterVersion := infrav1exp.ConvertFromSdkVersion(*s.scope.GCPManagedControlPlane.Spec.ControlPlaneVersion)
+		if desiredMasterVersion != infrav1exp.ConvertFromSdkVersion(existingCluster.InitialClusterVersion) {
 			needUpdate = true
 			clusterUpdate.DesiredMasterVersion = desiredMasterVersion
 			log.V(2).Info("Master version update required", "current", existingCluster.InitialClusterVersion, "desired", desiredMasterVersion)

@@ -180,9 +180,11 @@ func compareMasterAuthorizedNetworksConfig(a, b *containerpb.MasterAuthorizedNet
 	}
 
 	// Nil values are treated as empty list
-	if (a.CidrBlocks == nil && b.CidrBlocks != nil && len(b.CidrBlocks) > 0) ||
-		(a.CidrBlocks != nil && len(a.CidrBlocks) > 0 && b.CidrBlocks == nil) {
-		return false
+	if a.CidrBlocks == nil {
+		a.CidrBlocks = []*containerpb.MasterAuthorizedNetworksConfig_CidrBlock{}
+	}
+	if b.CidrBlocks == nil {
+		b.CidrBlocks = []*containerpb.MasterAuthorizedNetworksConfig_CidrBlock{}
 	}
 
 	if !cmp.Equal(a.CidrBlocks, b.CidrBlocks, cmpopts.IgnoreUnexported(containerpb.MasterAuthorizedNetworksConfig_CidrBlock{})) {

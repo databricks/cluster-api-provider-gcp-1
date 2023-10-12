@@ -354,9 +354,9 @@ func (s *Service) checkDiffAndPrepareUpdateConfig(existingNodePool *containerpb.
 	desiredNodePool := scope.ConvertToSdkNodePool(*s.scope.GCPManagedMachinePool, *s.scope.MachinePool, isRegional, s.scope.GCPManagedControlPlane.Spec.ClusterName)
 
 	// Node version
-	if s.scope.NodePoolVersion() != nil && *s.scope.NodePoolVersion() != infrav1exp.ConvertFromSdkNodeVersion(existingNodePool.Version) {
+	if s.scope.NodePoolVersion() != nil && infrav1exp.ConvertFromSdkVersion(*s.scope.NodePoolVersion()) != infrav1exp.ConvertFromSdkVersion(existingNodePool.Version) {
 		needUpdate = true
-		updateNodePoolRequest.NodeVersion = *s.scope.NodePoolVersion()
+		updateNodePoolRequest.NodeVersion = infrav1exp.ConvertFromSdkVersion(*s.scope.NodePoolVersion())
 	}
 	// Kubernetes labels
 	if !reflect.DeepEqual(desiredNodePool.Config.GetLabels(), existingNodePool.Config.Labels) {
