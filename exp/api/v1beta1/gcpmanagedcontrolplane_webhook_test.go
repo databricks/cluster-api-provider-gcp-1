@@ -304,8 +304,7 @@ var _ = Describe("GCPManagedControlPlaneWebhook", func() {
 			oldControlPlane.Spec.NetworkConfig = &NetworkConfig{
 				DNSConfig: &DNSConfig{},
 			}
-			warnings, err := controlPlane.ValidateUpdate(oldControlPlane)
-			Expect(warnings).To(BeNil())
+			err := controlPlane.ValidateUpdate(oldControlPlane)
 			Expect(err).To(Not(BeNil()))
 			Expect(err.Error()).To(ContainSubstring("spec.NetworkConfig.DNSConfig"))
 		})
