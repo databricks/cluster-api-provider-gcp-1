@@ -275,7 +275,9 @@ func (s *Service) createCluster(ctx context.Context, log *logr.Logger) error {
 	if !s.scope.IsAutopilotCluster() {
 		cluster.NodePools = scope.ConvertToSdkNodePools(nodePools, machinePools, isRegional, cluster.Name)
 	}
-
+	if s.scope.GCPManagedCluster.Spec.Network.Name != nil && s.scope.GCPManagedCluster.Spec.Network.Subnets != nil && len(s.scope.GCPManagedCluster.Spec.Network.Subnets[0].Name) > 0 {
+		cluster.Subnetwork = s.scope.GCPManagedCluster.Spec.Network.Subnets[0].Name
+	}
 	if s.scope.GCPManagedControlPlane.Spec.ClusterIpv4Cidr != nil {
 		cluster.ClusterIpv4Cidr = *s.scope.GCPManagedControlPlane.Spec.ClusterIpv4Cidr
 	}

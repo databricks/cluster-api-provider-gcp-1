@@ -282,3 +282,11 @@ func (s *ManagedClusterScope) PatchObject() error {
 func (s *ManagedClusterScope) Close() error {
 	return s.PatchObject()
 }
+
+// IsUsingSelfManagerNetworkingForManagedCluster checks if the GKE cluster is using self-managed networking.
+// In this case, users specify the VPC network and subnetwork for the cluster.
+func (s *ManagedClusterScope) IsUsingSelfManagerNetworkingForManagedCluster() bool {
+	// The GCPManagedCluster is using self-managed networking if it has a VPC network name and a subnetwork name.
+	// The subnetwork name is required if the VPC network name is specified.
+	return s.GCPManagedCluster.Spec.Network.Name != nil && s.GCPManagedCluster.Spec.Network.Subnets != nil && len(s.GCPManagedCluster.Spec.Network.Subnets[0].Name) > 0
+}
