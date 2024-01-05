@@ -178,6 +178,9 @@ func ConvertToSdkIPAllocationPolicy(policy *IPAllocationPolicy) *containerpb.IPA
 		ServicesSecondaryRangeName: pointer.StringDeref(policy.ServicesSecondaryRangeName, ""),
 		ClusterIpv4CidrBlock:       pointer.StringDeref(policy.ClusterIpv4CidrBlock, ""),
 		ServicesIpv4CidrBlock:      pointer.StringDeref(policy.ServicesIpv4CidrBlock, ""),
+		AdditionalPodRangesConfig: &containerpb.AdditionalPodRangesConfig{
+			PodRangeNames: policy.AdditionalPodRangeNames,
+		},
 	}
 }
 
