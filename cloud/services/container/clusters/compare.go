@@ -226,3 +226,24 @@ func compareWorkloadIdentityConfig(a, b *containerpb.WorkloadIdentityConfig) boo
 
 	return cmp.Equal(a, b, cmpopts.IgnoreUnexported(containerpb.WorkloadIdentityConfig{}))
 }
+func diffTwoArrays(a, b []string) (inA, inB []string) {
+	m := make(map[string]bool)
+
+	for _, item := range a {
+		m[item] = true
+	}
+
+	for _, item := range b {
+		if _, ok := m[item]; ok {
+			delete(m, item)
+		} else {
+			inB = append(inB, item)
+		}
+	}
+
+	for item := range m {
+		inA = append(inA, item)
+	}
+
+	return inA, inB
+}

@@ -478,6 +478,19 @@ func (s *Service) checkDiffAndUpdateCluster(ctx context.Context, existingCluster
 		log.Info("cluster MaintenancePolicy updating in progress")
 		return true, nil
 	}
+
+	// check if need update AdditionalPodRangesConfig
+	needUpdateAdditionalPodRangesConfig, updateAdditionalPodRangesConfigRequest := s.checkDiffAndPrepareUpdateAdditionalPodRangesConfig(existingCluster, log)
+	if needUpdateAdditionalPodRangesConfig {
+		log.Info("AdditionalPodRangesConfig update required")
+		err := s.updateCluster(ctx, updateAdditionalPodRangesConfigRequest, log)
+		if err != nil {
+			return false, err
+		}
+		log.Info("cluster AdditionalPodRangesConfig updating in progress")
+		return true, nil
+	}
+
 	// No updates needed
 	return false, nil
 }
@@ -688,4 +701,45 @@ func (s *Service) checkDiffAndPrepareUpdateMaintenancePolicy(existingCluster *co
 	}
 	log.V(4).Info("MaintenancePolicy update request. ", "needUpdate", needUpdate, "updateClusterRequest", &setMaintenancePolicyRequest)
 	return needUpdate, &setMaintenancePolicyRequest, nil
+}
+
+func (s *Service) checkDiffAndPrepareUpdateAdditionalPodRangesConfig(existingCluster *containerpb.Cluster, log *logr.Logger) (bool, *containerpb.UpdateClusterRequest) {
+	needUpdate := false
+	clusterUpdate := containerpb.ClusterUpdate{}
+	// Handle if either desired or existing IPAllocationPolicy is nil. In this case, it could suggest that IPAllocationPolicy is not used
+	if s.scope.GCPManagedControlPlane.Spec.IPAllocationPolicy == nil || existingCluster.IpAllocationPolicy == nil {
+		updateClusterRequest := containerpb.UpdateClusterRequest{
+			Name:   s.scope.ClusterFullName(),
+			Update: &clusterUpdate,
+		}
+		return needUpdate, &updateClusterRequest
+	}
+
+	// compare AdditionalRanges between desired and existing
+	// Add pod ranges into AdditionalPodRangesConfig if they are not in existing AdditionalPodRangesConfig but only in the new AdditionalPodRangesConfig
+	// Add pod ranges into RemovedAdditionalPodRangesConfig if they are in existing AdditionalPodRangesConfig but not in the new AdditionalPodRangesConfig
+	existingPodRangeNames := []string{}
+	if existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig != nil {
+		existingPodRangeNames = existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig.PodRangeNames
+	}
+	desiredPodRangeNames := s.scope.GCPManagedControlPlane.Spec.IPAllocationPolicy.AdditionalPodRangeNames
+	if !cmp.Equal(s.scope.GCPManagedControlPlane.Spec.IPAllocationPolicy.AdditionalPodRangeNames, existingPodRangeNames) {
+		needUpdate = true
+		additionalPodRanges, removedPodRanges := diffTwoArrays(desiredPodRangeNames, existingPodRangeNames)
+		additionalPodRangesConfig := &containerpb.AdditionalPodRangesConfig{
+			PodRangeNames: additionalPodRanges,
+		}
+		removedPodRangesConfig := &containerpb.AdditionalPodRangesConfig{
+			PodRangeNames: removedPodRanges,
+		}
+		clusterUpdate.AdditionalPodRangesConfig = additionalPodRangesConfig
+		clusterUpdate.RemovedAdditionalPodRangesConfig = removedPodRangesConfig
+		log.V(2).Info("AdditionalPodRangesConfig update required", "added", additionalPodRanges, "removed", removedPodRanges, "current", existingPodRangeNames, "desired", desiredPodRangeNames)
+	}
+	updateClusterRequest := containerpb.UpdateClusterRequest{
+		Name:   s.scope.ClusterFullName(),
+		Update: &clusterUpdate,
+	}
+	log.V(4).Info("AdditionalPodRangesConfig update cluster request. ", "needUpdate", needUpdate, "updateClusterRequest", &updateClusterRequest)
+	return needUpdate, &updateClusterRequest
 }

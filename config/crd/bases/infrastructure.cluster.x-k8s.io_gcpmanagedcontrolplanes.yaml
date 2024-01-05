@@ -139,6 +139,13 @@ spec:
                   GKE cluster IP allocation. If not specified then GKE default values
                   will be used.
                 properties:
+                  additionalPodRangeNames:
+                    description: AdditionalRanges represents the list of secondary
+                      pod ranges to be used for the GKE cluster. This field is only
+                      applicable when use_ip_aliases is set to true.
+                    items:
+                      type: string
+                    type: array
                   clusterIpv4CidrBlock:
                     description: ClusterIpv4CidrBlock represents the IP address range
                       for the GKE cluster pod IPs. If this field is set, then GCPManagedControlPlaneSpec.ClusterIpv4Cidr

@@ -207,6 +207,10 @@ type IPAllocationPolicy struct {
 	// If not specified the range will be chosen with the default size.
 	// +optional
 	ServicesIpv4CidrBlock *string `json:"servicesIpv4CidrBlock,omitempty"`
+	// AdditionalRanges represents the list of secondary pod ranges to be used for the GKE cluster.
+	// This field is only applicable when use_ip_aliases is set to true.
+	// +optional
+	AdditionalPodRangeNames []string `json:"additionalPodRangeNames,omitempty"`
 }
 
 // MaintenancePolicy represents configuration options for the GKE cluster maintenance policy.

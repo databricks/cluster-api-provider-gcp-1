@@ -149,11 +149,19 @@ func (r *GCPManagedControlPlane) ValidateUpdate(oldRaw runtime.Object) error {
 				r.Spec.ResourceLabels, "field is immutable"),
 		)
 	}
+	rCopy := r.DeepCopy()
+	oldCopy := old.DeepCopy()
 
-	if !cmp.Equal(r.Spec.IPAllocationPolicy, old.Spec.IPAllocationPolicy) {
+	if rCopy.Spec.IPAllocationPolicy != nil {
+		rCopy.Spec.IPAllocationPolicy.AdditionalPodRangeNames = []string{}
+	}
+	if oldCopy.Spec.IPAllocationPolicy != nil {
+		oldCopy.Spec.IPAllocationPolicy.AdditionalPodRangeNames = []string{}
+	}
+	if !cmp.Equal(rCopy.Spec.IPAllocationPolicy, oldCopy.Spec.IPAllocationPolicy) {
 		allErrs = append(allErrs,
 			field.Invalid(field.NewPath("spec", "IPAllocationPolicy"),
-				r.Spec.IPAllocationPolicy, "field is immutable"),
+				r.Spec.IPAllocationPolicy, "field is immutable except for AdditionalPodRangesConfig"),
 		)
 	}
 
