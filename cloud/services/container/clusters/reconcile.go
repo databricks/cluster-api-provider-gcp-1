@@ -719,11 +719,16 @@ func (s *Service) checkDiffAndPrepareUpdateAdditionalPodRangesConfig(existingClu
 	// Add pod ranges into AdditionalPodRangesConfig if they are not in existing AdditionalPodRangesConfig but only in the new AdditionalPodRangesConfig
 	// Add pod ranges into RemovedAdditionalPodRangesConfig if they are in existing AdditionalPodRangesConfig but not in the new AdditionalPodRangesConfig
 	existingPodRangeNames := []string{}
-	if existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig != nil {
+	if existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig != nil && existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig.PodRangeNames != nil {
 		existingPodRangeNames = existingCluster.IpAllocationPolicy.AdditionalPodRangesConfig.PodRangeNames
 	}
+
 	desiredPodRangeNames := s.scope.GCPManagedControlPlane.Spec.IPAllocationPolicy.AdditionalPodRangeNames
-	if !cmp.Equal(s.scope.GCPManagedControlPlane.Spec.IPAllocationPolicy.AdditionalPodRangeNames, existingPodRangeNames) {
+	if desiredPodRangeNames == nil {
+		desiredPodRangeNames = []string{}
+	}
+
+	if !cmp.Equal(desiredPodRangeNames, existingPodRangeNames) {
 		needUpdate = true
 		additionalPodRanges, removedPodRanges := diffTwoArrays(desiredPodRangeNames, existingPodRangeNames)
 		additionalPodRangesConfig := &containerpb.AdditionalPodRangesConfig{
