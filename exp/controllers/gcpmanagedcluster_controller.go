@@ -194,18 +194,22 @@ func (r *GCPManagedClusterReconciler) reconcile(ctx context.Context, clusterScop
 	}
 	clusterScope.SetFailureDomains(failureDomains)
 
-	reconcilers := map[string]cloud.Reconciler{
-		"networks": networks.New(clusterScope),
-		"subnets":  subnets.New(clusterScope),
-	}
-
-	for name, r := range reconcilers {
-		log.V(4).Info("Calling reconciler", "reconciler", name)
-		if err := r.Reconcile(ctx); err != nil {
-			log.Error(err, "Reconcile error", "reconciler", name)
-			record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
-			return ctrl.Result{}, err
+	if !clusterScope.IsUsingSelfManagerNetworkingForManagedCluster() {
+		reconcilers := map[string]cloud.Reconciler{
+			"networks": networks.New(clusterScope),
+			"subnets":  subnets.New(clusterScope),
 		}
+
+		for name, r := range reconcilers {
+			log.V(4).Info("Calling reconciler", "reconciler", name)
+			if err := r.Reconcile(ctx); err != nil {
+				log.Error(err, "Reconcile error", "reconciler", name)
+				record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		log.Info("Using shared VPC, skipping network and subnetwork reconcile")
 	}
 
 	clusterScope.SetReady()
@@ -232,19 +236,22 @@ func (r *GCPManagedClusterReconciler) reconcileDelete(ctx context.Context, clust
 		log.Info("GCPManagedControlPlane not deleted yet, retry later")
 		return ctrl.Result{RequeueAfter: reconciler.DefaultRetryTime}, nil
 	}
-
-	reconcilers := map[string]cloud.Reconciler{
-		"subnets":  subnets.New(clusterScope),
-		"networks": networks.New(clusterScope),
-	}
-
-	for name, r := range reconcilers {
-		log.V(4).Info("Calling reconciler delete", "reconciler", name)
-		if err := r.Delete(ctx); err != nil {
-			log.Error(err, "Reconcile error", "reconciler", name)
-			record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
-			return ctrl.Result{}, err
+	if !clusterScope.IsUsingSelfManagerNetworkingForManagedCluster() {
+		reconcilers := map[string]cloud.Reconciler{
+			"subnets":  subnets.New(clusterScope),
+			"networks": networks.New(clusterScope),
 		}
+
+		for name, r := range reconcilers {
+			log.V(4).Info("Calling reconciler delete", "reconciler", name)
+			if err := r.Delete(ctx); err != nil {
+				log.Error(err, "Reconcile error", "reconciler", name)
+				record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		log.Info("Using shared VPC, skipping network and subnetwork deletion")
 	}
 
 	controllerutil.RemoveFinalizer(clusterScope.GCPManagedCluster, infrav1exp.ClusterFinalizer)

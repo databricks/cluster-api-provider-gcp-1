@@ -19,10 +19,9 @@ package scope
 import (
 	"context"
 	"fmt"
-
-	"sigs.k8s.io/cluster-api-provider-gcp/cloud"
+	infrav1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	"sigs.k8s.io/cluster-api-provider-gcp/util/location"
-
+	"sigs.k8s.io/cluster-api-provider-gcp/util/nodepool"
 	"sigs.k8s.io/cluster-api/util/conditions"
 
 	compute "cloud.google.com/go/compute/apiv1"
@@ -153,43 +152,106 @@ func (s *ManagedMachinePoolScope) NodePoolVersion() *string {
 	return s.MachinePool.Spec.Template.Spec.Version
 }
 
-// ConvertToSdkNodePool converts a node pool to format that is used by GCP SDK.
-func ConvertToSdkNodePool(nodePool infrav1exp.GCPManagedMachinePool, machinePool clusterv1exp.MachinePool, regional bool) *containerpb.NodePool {
-	replicas := *machinePool.Spec.Replicas
-	if regional {
-		replicas /= cloud.DefaultNumRegionsPerZone
+// NodePoolResourceLabels returns the resource labels of the node pool.
+func NodePoolResourceLabels(additionalLabels infrav1.Labels, clusterName string) infrav1.Labels {
+	resourceLabels := additionalLabels.DeepCopy()
+	if resourceLabels == nil {
+		resourceLabels = infrav1.Labels{}
 	}
+	resourceLabels[infrav1.ClusterTagKey(clusterName)] = string(infrav1.ResourceLifecycleOwned)
+	return resourceLabels
+}
+
+// ConvertToSdkNodePool converts a node pool to format that is used by GCP SDK.
+func ConvertToSdkNodePool(nodePool infrav1exp.GCPManagedMachinePool, machinePool clusterv1exp.MachinePool, regional bool, clusterName string) *containerpb.NodePool {
+	replicas := nodepool.PerLocationReplicaCount(*machinePool.Spec.Replicas, regional)
+
 	nodePoolName := nodePool.Spec.NodePoolName
 	if len(nodePoolName) == 0 {
+		// Use the GCPManagedMachinePool CR name if nodePoolName is not specified
 		nodePoolName = nodePool.Name
 	}
+
+	// build node pool in GCP SDK format using the GCPManagedMachinePool spec
 	sdkNodePool := containerpb.NodePool{
 		Name:             nodePoolName,
 		InitialNodeCount: replicas,
 		Config: &containerpb.NodeConfig{
-			Labels:   nodePool.Spec.KubernetesLabels,
-			Taints:   infrav1exp.ConvertToSdkTaint(nodePool.Spec.KubernetesTaints),
-			Metadata: nodePool.Spec.AdditionalLabels,
+			Labels:         nodePool.Spec.KubernetesLabels,
+			Taints:         infrav1exp.ConvertToSdkTaint(nodePool.Spec.KubernetesTaints),
+			ResourceLabels: NodePoolResourceLabels(nodePool.Spec.AdditionalLabels, clusterName),
+			Tags:           nodePool.Spec.NetworkTags,
 		},
 	}
+	if nodePool.Spec.MachineType != nil {
+		sdkNodePool.Config.MachineType = *nodePool.Spec.MachineType
+	}
+	if nodePool.Spec.DiskSizeGb != nil {
+		sdkNodePool.Config.DiskSizeGb = *nodePool.Spec.DiskSizeGb
+	}
+	if nodePool.Spec.ServiceAccount != nil {
+		sdkNodePool.Config.ServiceAccount = *nodePool.Spec.ServiceAccount
+	}
+	if nodePool.Spec.ImageType != nil {
+		sdkNodePool.Config.ImageType = *nodePool.Spec.ImageType
+	}
+	if nodePool.Spec.LocalSsdCount != nil {
+		sdkNodePool.Config.LocalSsdCount = *nodePool.Spec.LocalSsdCount
+	}
+	if nodePool.Spec.DiskType != nil {
+		sdkNodePool.Config.DiskType = *nodePool.Spec.DiskType
+	}
 	if nodePool.Spec.Scaling != nil {
-		sdkNodePool.Autoscaling = &containerpb.NodePoolAutoscaling{
-			Enabled:      true,
-			MinNodeCount: *nodePool.Spec.Scaling.MinCount,
-			MaxNodeCount: *nodePool.Spec.Scaling.MaxCount,
+		sdkNodePool.Autoscaling = infrav1exp.ConvertToSdkAutoscaling(nodePool.Spec.Scaling)
+	}
+	if nodePool.Spec.Management != nil {
+		sdkNodePool.Management = &containerpb.NodeManagement{
+			AutoRepair:  nodePool.Spec.Management.AutoRepair,
+			AutoUpgrade: nodePool.Spec.Management.AutoUpgrade,
+		}
+	}
+	if nodePool.Spec.NetworkConfig != nil {
+		sdkNodePool.NetworkConfig = &containerpb.NodeNetworkConfig{
+			CreatePodRange:   nodePool.Spec.NetworkConfig.CreatePodRange,
+			PodRange:         nodePool.Spec.NetworkConfig.PodRange,
+			PodIpv4CidrBlock: nodePool.Spec.NetworkConfig.PodIpv4CidrBlock,
+		}
+	}
+	if nodePool.Spec.MaxPodsConstraint != nil {
+		sdkNodePool.MaxPodsConstraint = &containerpb.MaxPodsConstraint{
+			MaxPodsPerNode: *nodePool.Spec.MaxPodsConstraint,
 		}
 	}
 	if machinePool.Spec.Template.Spec.Version != nil {
 		sdkNodePool.Version = *machinePool.Spec.Template.Spec.Version
 	}
+	if nodePool.Spec.Locations != nil {
+		sdkNodePool.Locations = nodePool.Spec.Locations
+	}
+	if nodePool.Spec.Reservation != nil {
+		sdkNodePool.Config.ReservationAffinity = &containerpb.ReservationAffinity{
+			ConsumeReservationType: containerpb.ReservationAffinity_SPECIFIC_RESERVATION,
+			Key:                    "compute.googleapis.com/reservation-name",
+			Values:                 []string{*nodePool.Spec.Reservation},
+		}
+	}
+	if nodePool.Spec.Accelerators != nil {
+		sdkNodePool.Config.Accelerators = []*containerpb.AcceleratorConfig{}
+		for _, acceleratorConfig := range nodePool.Spec.Accelerators {
+			sdkNodePool.Config.Accelerators = append(sdkNodePool.Config.Accelerators, &containerpb.AcceleratorConfig{
+				AcceleratorCount: acceleratorConfig.AcceleratorCount,
+				AcceleratorType:  acceleratorConfig.AcceleratorType,
+			})
+		}
+	}
 	return &sdkNodePool
 }
 
 // ConvertToSdkNodePools converts node pools to format that is used by GCP SDK.
-func ConvertToSdkNodePools(nodePools []infrav1exp.GCPManagedMachinePool, machinePools []clusterv1exp.MachinePool, regional bool) []*containerpb.NodePool {
+func ConvertToSdkNodePools(nodePools []infrav1exp.GCPManagedMachinePool, machinePools []clusterv1exp.MachinePool, regional bool, clusterName string) []*containerpb.NodePool {
 	res := []*containerpb.NodePool{}
 	for i := range nodePools {
-		res = append(res, ConvertToSdkNodePool(nodePools[i], machinePools[i], regional))
+		res = append(res, ConvertToSdkNodePool(nodePools[i], machinePools[i], regional, clusterName))
 	}
 	return res
 }

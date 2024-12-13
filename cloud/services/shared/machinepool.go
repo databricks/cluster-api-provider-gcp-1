@@ -19,11 +19,11 @@ package shared
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	clusterv1exp "sigs.k8s.io/cluster-api/exp/api/v1beta1"
 
-	"sigs.k8s.io/cluster-api-provider-gcp/cloud"
 	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 )
 
@@ -33,11 +33,12 @@ func ManagedMachinePoolPreflightCheck(managedPool *infrav1exp.GCPManagedMachineP
 		return fmt.Errorf("expect machinepool infraref (%s) to match managed machine pool name (%s)", machinePool.Spec.Template.Spec.InfrastructureRef.Name, managedPool.Name)
 	}
 
-	if IsRegional(location) {
-		if *machinePool.Spec.Replicas%cloud.DefaultNumRegionsPerZone != 0 {
-			return fmt.Errorf("a machine pool (%s) in a regional cluster must have replicas with a multiple of %d", machinePool.Name, cloud.DefaultNumRegionsPerZone)
-		}
-	}
+	// Comment this out since we should allow replicas to be any number
+	//if IsRegional(location) {
+	//	if *machinePool.Spec.Replicas%cloud.DefaultNumRegionsPerZone != 0 {
+	//		return fmt.Errorf("a machine pool (%s) in a regional cluster must have replicas with a multiple of %d", machinePool.Name, cloud.DefaultNumRegionsPerZone)
+	//	}
+	//}
 
 	return nil
 }
@@ -47,6 +48,13 @@ func ManagedMachinePoolsPreflightCheck(managedPools []infrav1exp.GCPManagedMachi
 	if len(machinePools) != len(managedPools) {
 		return errors.New("each machinepool must have a matching gcpmanagedmachinepool")
 	}
+
+	sort.Slice(machinePools, func(i, j int) bool {
+		return machinePools[i].Spec.Template.Spec.InfrastructureRef.Name < machinePools[j].Spec.Template.Spec.InfrastructureRef.Name
+	})
+	sort.Slice(managedPools, func(i, j int) bool {
+		return managedPools[i].Name < managedPools[j].Name
+	})
 
 	for i := range machinePools {
 		machinepool := machinePools[i]

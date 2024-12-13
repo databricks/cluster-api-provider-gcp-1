@@ -20,8 +20,11 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .spec.mode
-      name: Mode
+    - jsonPath: .status.ready
+      name: Ready
+      type: string
+    - jsonPath: .status.replicas
+      name: Replicas
       type: string
     name: v1beta1
     schema:
@@ -44,6 +47,25 @@ spec:
           spec:
             description: GCPManagedMachinePoolSpec defines the desired state of GCPManagedMachinePool.
             properties:
+              accelerators:
+                description: Accelerators is a list of hardware accelerators to be
+                  attached to each node. See https://cloud.google.com/compute/docs/gpus
+                  for more information about support for GPUs.
+                items:
+                  description: AcceleratorConfig defines the AcceleratorConfig represents
+                    a GPU Accelerator request. https://pkg.go.dev/cloud.google.com/go/container/apiv1/containerpb#AcceleratorConfig
+                  properties:
+                    acceleratorCount:
+                      description: The number of the accelerator cards exposed to
+                        an instance.
+                      format: int64
+                      type: integer
+                    acceleratorType:
+                      description: The accelerator type resource name. List of supported
+                        accelerators [here](https://cloud.google.com/compute/docs/gpus)
+                      type: string
+                  type: object
+                type: array
               additionalLabels:
                 additionalProperties:
                   type: string
@@ -51,6 +73,21 @@ spec:
                   GCP resources managed by the GCP provider, in addition to the ones
                   added by default.
                 type: object
+              diskSizeGb:
+                description: DiskSizeGb is the size of the disk attached to each node,
+                  specified in GB. The smallest allowed disk size is 10GB. If unspecified,
+                  the default disk size is 100GB.
+                format: int32
+                type: integer
+              diskType:
+                description: DiskType is the of the disk attached to each node
+                type: string
+              imageType:
+                description: ImageType is the type of image to use for this node.
+                  Note that for a given image type, the latest version of it will
+                  be used. Please see https://cloud.google.com/kubernetes-engine/docs/concepts/node-images
+                  for available image types.
+                type: string
               kubernetesLabels:
                 additionalProperties:
                   type: string
@@ -82,6 +119,87 @@ spec:
                   - value
                   type: object
                 type: array
+              localSsdCount:
+                description: LocalSsdCount is the number of local SSD disks to be
+                  attached to the node.
+                format: int32
+                type: integer
+              locations:
+                description: Locations are the zones in which the node pool's nodes
+                  should be located. The list of Google Compute Engine [zones](https://cloud.google.com/compute/docs/zones#available)
+                  in which the NodePool's nodes should be located. If this value is
+                  unspecified during node pool creation, the [Cluster.Locations](https://cloud.google.com/kubernetes-engine/docs/reference/rest/v1/projects.locations.clusters#Cluster.FIELDS.locations)
+                  value will be used, instead.
+                items:
+                  type: string
+                type: array
+              machineType:
+                description: MachineType is the name of a Google Compute Engine [machine
+                  type](https://cloud.google.com/compute/docs/machine-types). If unspecified,
+                  the default machine type is `e2-medium`.
+                type: string
+              management:
+                description: NodeManagement configuration for this NodePool.
+                properties:
+                  autoRepair:
+                    description: AutoRepair specifies whether the node auto-repair
+                      is enabled for the node pool. If enabled, the nodes in this
+                      node pool will be monitored and, if they fail health checks
+                      too many times, an automatic repair action will be triggered.
+                    type: boolean
+                  autoUpgrade:
+                    description: AutoUpgrade specifies whether node auto-upgrade is
+                      enabled for the node pool. If enabled, node auto-upgrade helps
+                      keep the nodes in your node pool up to date with the latest
+                      release version of Kubernetes.
+                    type: boolean
+                type: object
+              maxPodsConstraint:
+                description: MaxPodsConstraint is the maximum number of pods that
+                  can be run simultaneously on a node in the node pool.
+                format: int64
+                type: integer
+              networkConfig:
+                description: Networking configuration for this NodePool. If specified,
+                  it overrides the cluster-level defaults.
+                properties:
+                  createPodRange:
+                    description: "Whether to create a new range for pod IPs in this
+                      node pool. Defaults are provided for `pod_range` and `pod_ipv4_cidr_block`
+                      if they are not specified. \n If neither `create_pod_range`
+                      or `pod_range` are specified, the cluster-level default (`ip_allocation_policy.cluster_ipv4_cidr_block`)
+                      is used. \n Only applicable if `ip_allocation_policy.use_ip_aliases`
+                      is true. \n This field cannot be changed after the node pool
+                      has been created."
+                    type: boolean
+                  podIpv4CidrBlock:
+                    description: "The IP address range for pod IPs in this node pool.
+                      \n Only applicable if `create_pod_range` is true. \n Set to
+                      blank to have a range chosen with the default size. \n Set to
+                      /netmask (e.g. `/14`) to have a range chosen with a specific
+                      netmask. \n Set to a [CIDR](https://en.wikipedia.org/wiki/Classless_Inter-Domain_Routing)
+                      notation (e.g. `10.96.0.0/14`) to pick a specific range to use.
+                      \n Only applicable if `ip_allocation_policy.use_ip_aliases`
+                      is true. \n This field cannot be changed after the node pool
+                      has been created."
+                    type: string
+                  podRange:
+                    description: "The ID of the secondary range for pod IPs. If `create_pod_range`
+                      is true, this ID is used for the new range. If `create_pod_range`
+                      is false, uses an existing secondary range with this ID. \n
+                      Only applicable if `ip_allocation_policy.use_ip_aliases` is
+                      true. \n This field cannot be changed after the node pool has
+                      been created."
+                    type: string
+                type: object
+              networkTags:
+                description: The list of instance tags applied to all nodes. Tags
+                  are used to identify valid sources or targets for network firewalls
+                  and are specified by the client during cluster or node pool creation.
+                  Each tag within the list must comply with RFC1035.
+                items:
+                  type: string
+                type: array
               nodePoolName:
                 description: NodePoolName specifies the name of the GKE node pool
                   corresponding to this MachinePool. If you don't specify a name then
@@ -95,16 +213,40 @@ spec:
                 items:
                   type: string
                 type: array
+              reservation:
+                description: Reservation is the name of GCP compute specific reservation.
+                  It usually specifies zone information as well.
+                type: string
               scaling:
                 description: Scaling specifies scaling for the node pool
                 properties:
+                  enableAutoscaling:
+                    description: Is autoscaling enabled for this node pool. If unspecified,
+                      the default value is true.
+                    type: boolean
+                  locationPolicy:
+                    description: Location policy used when scaling up a nodepool.
+                    enum:
+                    - balanced
+                    - any
+                    type: string
                   maxCount:
+                    description: MaxCount specifies the maximum number of nodes in
+                      the node pool
                     format: int32
                     type: integer
                   minCount:
+                    description: MinCount specifies the minimum number of nodes in
+                      the node pool
                     format: int32
                     type: integer
                 type: object
+              serviceAccount:
+                description: ServiceAccount is the Google Cloud Platform Service Account
+                  to be used by the node VMs. Specify the email address of the Service
+                  Account; otherwise, if no Service Account is specified, the "default"
+                  service account is used.
+                type: string
             type: object
           status:
             description: GCPManagedMachinePoolStatus defines the observed state of
@@ -157,6 +299,9 @@ spec:
                   type: object
                 type: array
               ready:
+                default: false
+                description: Ready denotes that the GCPManagedMachinePool has joined
+                  the cluster
                 type: boolean
               replicas:
                 description: Replicas is the most recently observed number of replicas.

@@ -30,6 +30,11 @@ const (
 	// owner: @richardchen331 & @richardcase
 	// alpha: v0.1
 	GKE featuregate.Feature = "GKE"
+
+	// GKEUsePerProjectRateLimiter is used to enable the per-project bucket rate limiter.
+	// owner: @karthikbalasub
+	// alpha: v1.0
+	GKEUsePerProjectRateLimiter featuregate.Feature = "GKEUsePerProjectRateLimiter"
 )
 
 func init() {
@@ -39,5 +44,6 @@ func init() {
 // defaultCAPGFeatureGates consists of all known capg-specific feature keys.
 // To add a new feature, define a key for it above and add it here.
 var defaultCAPGFeatureGates = map[featuregate.Feature]featuregate.FeatureSpec{
-	GKE: {Default: false, PreRelease: featuregate.Alpha},
+	GKE:                         {Default: false, PreRelease: featuregate.Alpha},
+	GKEUsePerProjectRateLimiter: {Default: false, PreRelease: featuregate.Alpha},
 }

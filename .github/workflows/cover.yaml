@@ -5,7 +5,9 @@ on:
     - main
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on:
+      group: databricks-eng-protected-runner-group
+      labels: linux-ubuntu-latest
     steps:
     - uses: actions/checkout@master
     - run: "make test-cover"

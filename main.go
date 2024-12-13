@@ -24,6 +24,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/ratelimiter"
 	"time"
 
 	// +kubebuilder:scaffold:imports
@@ -40,6 +41,7 @@ import (
 	infrav1exp "sigs.k8s.io/cluster-api-provider-gcp/exp/api/v1beta1"
 	expcontrollers "sigs.k8s.io/cluster-api-provider-gcp/exp/controllers"
 	"sigs.k8s.io/cluster-api-provider-gcp/feature"
+	ratelimiterutil "sigs.k8s.io/cluster-api-provider-gcp/util/ratelimiter"
 	"sigs.k8s.io/cluster-api-provider-gcp/util/reconciler"
 	"sigs.k8s.io/cluster-api-provider-gcp/version"
 	clusterv1 "sigs.k8s.io/cluster-api/api/v1beta1"
@@ -189,27 +191,48 @@ func setupReconcilers(ctx context.Context, mgr ctrl.Manager) error {
 	if feature.Gates.Enabled(feature.GKE) {
 		setupLog.Info("Enabling GKE reconcilers")
 
+		var clusterRatelimiter ratelimiter.RateLimiter
+		if feature.Gates.Enabled(feature.GKEUsePerProjectRateLimiter) {
+			clusterRatelimiter = ratelimiterutil.PerGroupBucketRateLimiter(mgr.GetClient(), setupLog, ratelimiterutil.GetGroupKeyFromCluster)
+		}
 		if err := (&expcontrollers.GCPManagedClusterReconciler{
 			Client:           mgr.GetClient(),
 			ReconcileTimeout: reconcileTimeout,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{
+			MaxConcurrentReconciles: gcpClusterConcurrency,
+			RateLimiter:             clusterRatelimiter,
+		}); err != nil {
 			return fmt.Errorf("setting up GCPManagedCluster controller: %w", err)
 		}
 
+		var managedControlPlaneRateLimiter ratelimiter.RateLimiter
+		if feature.Gates.Enabled(feature.GKEUsePerProjectRateLimiter) {
+			managedControlPlaneRateLimiter = ratelimiterutil.PerGroupBucketRateLimiter(mgr.GetClient(), setupLog, ratelimiterutil.GetGroupKeyFromControlPlane)
+		}
 		if err := (&expcontrollers.GCPManagedControlPlaneReconciler{
 			Client:           mgr.GetClient(),
 			ReconcileTimeout: reconcileTimeout,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpClusterConcurrency}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{
+			MaxConcurrentReconciles: gcpClusterConcurrency,
+			RateLimiter:             managedControlPlaneRateLimiter,
+		}); err != nil {
 			return fmt.Errorf("setting up GCPManagedControlPlane controller: %w", err)
 		}
 
+		var machinePoolRateLimiter ratelimiter.RateLimiter
+		if feature.Gates.Enabled(feature.GKEUsePerProjectRateLimiter) {
+			machinePoolRateLimiter = ratelimiterutil.PerGroupBucketRateLimiter(mgr.GetClient(), setupLog, ratelimiterutil.GetGroupKeyFromManagedMachinePool)
+		}
 		if err := (&expcontrollers.GCPManagedMachinePoolReconciler{
 			Client:           mgr.GetClient(),
 			ReconcileTimeout: reconcileTimeout,
 			WatchFilterValue: watchFilterValue,
-		}).SetupWithManager(ctx, mgr, controller.Options{MaxConcurrentReconciles: gcpMachineConcurrency}); err != nil {
+		}).SetupWithManager(ctx, mgr, controller.Options{
+			MaxConcurrentReconciles: gcpMachineConcurrency,
+			RateLimiter:             machinePoolRateLimiter,
+		}); err != nil {
 			return fmt.Errorf("setting up GCPManagedMachinePool controller: %w", err)
 		}
 	}
