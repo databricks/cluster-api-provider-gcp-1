@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"sigs.k8s.io/cluster-api/util/annotations"
@@ -48,8 +49,9 @@ import (
 // GCPManagedControlPlaneReconciler reconciles a GCPManagedControlPlane object.
 type GCPManagedControlPlaneReconciler struct {
 	client.Client
-	ReconcileTimeout time.Duration
-	WatchFilterValue string
+	ReconcileTimeout         time.Duration
+	WatchFilterValue         string
+	GcpmcpReconcileWhitelist string
 }
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gcpmanagedcontrolplanes,verbs=get;list;watch;create;update;patch;delete
@@ -85,6 +87,20 @@ func (r *GCPManagedControlPlaneReconciler) SetupWithManager(ctx context.Context,
 }
 
 func (r *GCPManagedControlPlaneReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	if r.GcpmcpReconcileWhitelist != "" {
+		whitelistedCrs := strings.Split(r.GcpmcpReconcileWhitelist, ",")
+		isWhitelisted := false
+		for _, cr := range whitelistedCrs {
+			if cr == req.Name {
+				isWhitelisted = true
+				break
+			}
+		}
+		if !isWhitelisted {
+			return ctrl.Result{}, nil
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
 	defer cancel()
 
@@ -110,7 +126,11 @@ func (r *GCPManagedControlPlaneReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, nil
 	}
 
-	if annotations.IsPaused(cluster, gcpManagedControlPlane) {
+	// Only return early if it's paused with the manual pause annotation. Do not return early if it's paused due to staged update
+	// Note: since we effectively control what can be changed in DKC controller (update node pool min/max, and new node pool creation),
+	// allowing changes in CAP* should be safe (in theory we would reconcile everything, but they won't change, unless it's a new cluster
+	// being created), and makes the logic simpler.
+	if annotations.IsPaused(cluster, gcpManagedControlPlane) && cluster.ObjectMeta.Annotations != nil && cluster.ObjectMeta.Annotations[infrav1exp.AnnotationPaused] == "true" {
 		log.Info("Reconciliation is paused for this object")
 		return ctrl.Result{}, nil
 	}
@@ -136,7 +156,7 @@ func (r *GCPManagedControlPlaneReconciler) Reconcile(ctx context.Context, req ct
 		return ctrl.Result{}, errors.Errorf("failed to create scope: %+v", err)
 	}
 
-	// Always close the scope when exiting this function so we can persist any GCPMachine changes.
+	// Always close the scope when exiting this function so we can persist any GCPManagedControlPlane changes.
 	defer func() {
 		if err := managedControlPlaneScope.Close(); err != nil && reterr == nil {
 			reterr = err
@@ -215,7 +235,8 @@ func (r *GCPManagedControlPlaneReconciler) reconcileDelete(ctx context.Context, 
 		}
 	}
 
-	if conditions.Get(managedControlPlaneScope.GCPManagedControlPlane, infrav1exp.GKEControlPlaneDeletingCondition).Reason == infrav1exp.GKEControlPlaneDeletedReason {
+	deletingCondition := conditions.Get(managedControlPlaneScope.GCPManagedControlPlane, infrav1exp.GKEControlPlaneDeletingCondition)
+	if deletingCondition != nil && deletingCondition.Reason == infrav1exp.GKEControlPlaneDeletedReason {
 		controllerutil.RemoveFinalizer(managedControlPlaneScope.GCPManagedControlPlane, infrav1exp.ManagedControlPlaneFinalizer)
 	}
 

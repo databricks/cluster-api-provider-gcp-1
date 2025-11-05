@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -56,8 +57,9 @@ import (
 // GCPManagedMachinePoolReconciler reconciles a GCPManagedMachinePool object.
 type GCPManagedMachinePoolReconciler struct {
 	client.Client
-	ReconcileTimeout time.Duration
-	WatchFilterValue string
+	ReconcileTimeout         time.Duration
+	WatchFilterValue         string
+	GcpmmpReconcileWhitelist string
 }
 
 // GetOwnerClusterKey returns only the Cluster name and namespace.
@@ -225,6 +227,20 @@ func getOwnerMachinePool(ctx context.Context, c client.Client, obj metav1.Object
 //+kubebuilder:rbac:groups=cluster.x-k8s.io,resources=clusters;clusters/status,verbs=get;list;watch
 
 func (r *GCPManagedMachinePoolReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	if r.GcpmmpReconcileWhitelist != "" {
+		whitelistedCrs := strings.Split(r.GcpmmpReconcileWhitelist, ",")
+		isWhitelisted := false
+		for _, cr := range whitelistedCrs {
+			if cr == req.Name {
+				isWhitelisted = true
+				break
+			}
+		}
+		if !isWhitelisted {
+			return ctrl.Result{}, nil
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
 	defer cancel()
 
@@ -256,7 +272,12 @@ func (r *GCPManagedMachinePoolReconciler) Reconcile(ctx context.Context, req ctr
 		log.Info("Failed to retrieve Cluster from MachinePool")
 		return ctrl.Result{}, err
 	}
-	if annotations.IsPaused(cluster, gcpManagedMachinePool) {
+
+	// Only return early if it's paused with the manual pause annotation. Do not return early if it's paused due to staged update
+	// Note: since we effectively control what can be changed in DKC controller (update node pool min/max, and new node pool creation),
+	// allowing changes in CAP* should be safe (in theory we would reconcile everything, but they won't change, unless it's a new cluster
+	// being created), and makes the logic simpler.
+	if annotations.IsPaused(cluster, gcpManagedMachinePool) && cluster.ObjectMeta.Annotations != nil && cluster.ObjectMeta.Annotations[infrav1exp.AnnotationPaused] == "true" {
 		log.Info("Reconciliation is paused for this object")
 		return ctrl.Result{}, nil
 	}
@@ -303,6 +324,7 @@ func (r *GCPManagedMachinePoolReconciler) Reconcile(ctx context.Context, req ctr
 	// Always close the scope when exiting this function so we can persist any GCPMachine changes.
 	defer func() {
 		if err := managedMachinePoolScope.Close(); err != nil && reterr == nil {
+			log.Error(err, "Failed to patch GCPManagedMachinePool object", "GCPManagedMachinePool", managedMachinePoolScope.GCPManagedMachinePool.Name)
 			reterr = err
 		}
 	}()

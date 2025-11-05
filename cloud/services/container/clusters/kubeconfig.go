@@ -17,12 +17,11 @@ limitations under the License.
 package clusters
 
 import (
+	"cloud.google.com/go/container/apiv1/containerpb"
+	"cloud.google.com/go/iam/credentials/apiv1/credentialspb"
 	"context"
 	"encoding/base64"
 	"fmt"
-
-	"cloud.google.com/go/container/apiv1/containerpb"
-	"cloud.google.com/go/iam/credentials/apiv1/credentialspb"
 	"github.com/go-logr/logr"
 	"github.com/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
@@ -65,7 +64,7 @@ func (s *Service) reconcileKubeconfig(ctx context.Context, cluster *containerpb.
 			return fmt.Errorf("creating kubeconfig secret: %w", createErr)
 		}
 	} else if updateErr := s.updateCAPIKubeconfigSecret(ctx, configSecret); updateErr != nil {
-		return fmt.Errorf("updating kubeconfig secret: %w", err)
+		return fmt.Errorf("updating kubeconfig secret: %w", updateErr)
 	}
 
 	return nil
@@ -241,8 +240,9 @@ func (s *Service) createBaseKubeConfig(contextName string, cluster *containerpb.
 }
 
 func (s *Service) generateToken(ctx context.Context) (string, error) {
+	gcpServiceAccount := s.scope.GetGcpServiceAccount()
 	req := &credentialspb.GenerateAccessTokenRequest{
-		Name: fmt.Sprintf("projects/-/serviceAccounts/%s", s.scope.GetCredential().ClientEmail),
+		Name: fmt.Sprintf("projects/-/serviceAccounts/%s", gcpServiceAccount),
 		Scope: []string{
 			GkeScope,
 		},

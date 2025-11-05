@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/GoogleCloudPlatform/k8s-cloud-provider/pkg/cloud/filter"
@@ -50,8 +51,9 @@ import (
 // GCPManagedClusterReconciler reconciles a GCPManagedCluster object.
 type GCPManagedClusterReconciler struct {
 	client.Client
-	WatchFilterValue string
-	ReconcileTimeout time.Duration
+	WatchFilterValue        string
+	ReconcileTimeout        time.Duration
+	GcpmcReconcileWhitelist string
 }
 
 //+kubebuilder:rbac:groups=infrastructure.cluster.x-k8s.io,resources=gcpmanagedclusters,verbs=get;list;watch;create;update;patch;delete
@@ -63,6 +65,20 @@ type GCPManagedClusterReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *GCPManagedClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (_ ctrl.Result, reterr error) {
+	if r.GcpmcReconcileWhitelist != "" {
+		whitelistedCrs := strings.Split(r.GcpmcReconcileWhitelist, ",")
+		isWhitelisted := false
+		for _, cr := range whitelistedCrs {
+			if cr == req.Name {
+				isWhitelisted = true
+				break
+			}
+		}
+		if !isWhitelisted {
+			return ctrl.Result{}, nil
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(ctx, reconciler.DefaultedLoopTimeout(r.ReconcileTimeout))
 	defer cancel()
 
@@ -194,18 +210,22 @@ func (r *GCPManagedClusterReconciler) reconcile(ctx context.Context, clusterScop
 	}
 	clusterScope.SetFailureDomains(failureDomains)
 
-	reconcilers := map[string]cloud.Reconciler{
-		"networks": networks.New(clusterScope),
-		"subnets":  subnets.New(clusterScope),
-	}
-
-	for name, r := range reconcilers {
-		log.V(4).Info("Calling reconciler", "reconciler", name)
-		if err := r.Reconcile(ctx); err != nil {
-			log.Error(err, "Reconcile error", "reconciler", name)
-			record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
-			return ctrl.Result{}, err
+	if !clusterScope.IsUsingSelfManagerNetworkingForManagedCluster() {
+		reconcilers := map[string]cloud.Reconciler{
+			"networks": networks.New(clusterScope),
+			"subnets":  subnets.New(clusterScope),
 		}
+
+		for name, r := range reconcilers {
+			log.V(4).Info("Calling reconciler", "reconciler", name)
+			if err := r.Reconcile(ctx); err != nil {
+				log.Error(err, "Reconcile error", "reconciler", name)
+				record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		log.Info("Using shared VPC, skipping network and subnetwork reconcile")
 	}
 
 	clusterScope.SetReady()
@@ -232,19 +252,22 @@ func (r *GCPManagedClusterReconciler) reconcileDelete(ctx context.Context, clust
 		log.Info("GCPManagedControlPlane not deleted yet, retry later")
 		return ctrl.Result{RequeueAfter: reconciler.DefaultRetryTime}, nil
 	}
-
-	reconcilers := map[string]cloud.Reconciler{
-		"subnets":  subnets.New(clusterScope),
-		"networks": networks.New(clusterScope),
-	}
-
-	for name, r := range reconcilers {
-		log.V(4).Info("Calling reconciler delete", "reconciler", name)
-		if err := r.Delete(ctx); err != nil {
-			log.Error(err, "Reconcile error", "reconciler", name)
-			record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
-			return ctrl.Result{}, err
+	if !clusterScope.IsUsingSelfManagerNetworkingForManagedCluster() {
+		reconcilers := map[string]cloud.Reconciler{
+			"subnets":  subnets.New(clusterScope),
+			"networks": networks.New(clusterScope),
 		}
+
+		for name, r := range reconcilers {
+			log.V(4).Info("Calling reconciler delete", "reconciler", name)
+			if err := r.Delete(ctx); err != nil {
+				log.Error(err, "Reconcile error", "reconciler", name)
+				record.Warnf(clusterScope.GCPManagedCluster, "GCPManagedClusterReconcile", "Reconcile error - %v", err)
+				return ctrl.Result{}, err
+			}
+		}
+	} else {
+		log.Info("Using shared VPC, skipping network and subnetwork deletion")
 	}
 
 	controllerutil.RemoveFinalizer(clusterScope.GCPManagedCluster, infrav1exp.ClusterFinalizer)

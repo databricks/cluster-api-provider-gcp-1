@@ -19,6 +19,7 @@ package scope
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	computerest "cloud.google.com/go/compute/apiv1"
@@ -32,6 +33,10 @@ import (
 	"k8s.io/client-go/util/flowcontrol"
 	infrav1 "sigs.k8s.io/cluster-api-provider-gcp/api/v1beta1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	EnableWifEnvVar = "ENABLE_WIF"
 )
 
 // GCPServices contains all the gcp services used by the scopes.
@@ -77,12 +82,16 @@ func defaultClientOptions(ctx context.Context, credentialsRef *infrav1.ObjectRef
 		option.WithUserAgent(fmt.Sprintf("gcp.cluster.x-k8s.io/%s", version.Get())),
 	}
 
-	if credentialsRef != nil {
-		rawData, err := getCredentialDataFromRef(ctx, credentialsRef, crClient)
-		if err != nil {
-			return nil, fmt.Errorf("getting gcp credentials from reference %s: %w", credentialsRef, err)
+	// No longer use hardcoded credentials anymore, instead we use WIF (https://cloud.google.com/kubernetes-engine/docs/how-to/workload-identity).
+	// After we update DKC to no longer set up credentialsRef, we should go back to allow using credentialsRef as an option (e.g. local development).
+	if os.Getenv(EnableWifEnvVar) != "true" {
+		if credentialsRef != nil {
+			rawData, err := getCredentialDataFromRef(ctx, credentialsRef, crClient)
+			if err != nil {
+				return nil, fmt.Errorf("getting gcp credentials from reference %s: %w", credentialsRef, err)
+			}
+			opts = append(opts, option.WithCredentialsJSON(rawData))
 		}
-		opts = append(opts, option.WithCredentialsJSON(rawData))
 	}
 
 	return opts, nil

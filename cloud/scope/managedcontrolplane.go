@@ -17,8 +17,10 @@ limitations under the License.
 package scope
 
 import (
+	"cloud.google.com/go/compute/metadata"
 	"context"
 	"fmt"
+	"os"
 
 	"sigs.k8s.io/cluster-api-provider-gcp/util/location"
 
@@ -62,9 +64,19 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 		return nil, errors.New("failed to generate new scope from nil GCPManagedControlPlane")
 	}
 
-	credential, err := getCredentials(ctx, params.GCPManagedCluster.Spec.CredentialsRef, params.Client)
-	if err != nil {
-		return nil, fmt.Errorf("getting gcp credentials: %w", err)
+	var gcpServiceAccount string
+	if os.Getenv(EnableWifEnvVar) != "true" {
+		credential, err := getCredentials(ctx, params.GCPManagedCluster.Spec.CredentialsRef, params.Client)
+		if err != nil {
+			return nil, fmt.Errorf("getting gcp credentials: %w", err)
+		}
+		gcpServiceAccount = credential.ClientEmail
+	} else {
+		gsa, err := getGCPServiceAccountFromWIF()
+		if err != nil {
+			return nil, fmt.Errorf("Failed to get GCP service account: %w", err)
+		}
+		gcpServiceAccount = gsa
 	}
 
 	if params.ManagedClusterClient == nil {
@@ -76,7 +88,7 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 	}
 	if params.CredentialsClient == nil {
 		var credentialsClient *credentials.IamCredentialsClient
-		credentialsClient, err = newIamCredentialsClient(ctx, params.GCPManagedCluster.Spec.CredentialsRef, params.Client)
+		credentialsClient, err := newIamCredentialsClient(ctx, params.GCPManagedCluster.Spec.CredentialsRef, params.Client)
 		if err != nil {
 			return nil, errors.Errorf("failed to create gcp credentials client: %v", err)
 		}
@@ -95,7 +107,7 @@ func NewManagedControlPlaneScope(ctx context.Context, params ManagedControlPlane
 		GCPManagedControlPlane: params.GCPManagedControlPlane,
 		mcClient:               params.ManagedClusterClient,
 		credentialsClient:      params.CredentialsClient,
-		credential:             credential,
+		GcpServiceAccount:      gcpServiceAccount,
 		patchHelper:            helper,
 	}, nil
 }
@@ -110,10 +122,18 @@ type ManagedControlPlaneScope struct {
 	GCPManagedControlPlane *infrav1exp.GCPManagedControlPlane
 	mcClient               *container.ClusterManagerClient
 	credentialsClient      *credentials.IamCredentialsClient
-	credential             *Credential
+	GcpServiceAccount      string
 
 	AllMachinePools        []clusterv1exp.MachinePool
 	AllManagedMachinePools []infrav1exp.GCPManagedMachinePool
+}
+
+func getGCPServiceAccountFromWIF() (string, error) {
+	gsa, err := metadata.Email("default")
+	if err != nil {
+		return "", fmt.Errorf("Failed to get service account email from metadata server: %v", err)
+	}
+	return gsa, nil
 }
 
 // PatchObject persists the managed control plane configuration and status.
@@ -156,9 +176,9 @@ func (s *ManagedControlPlaneScope) CredentialsClient() *credentials.IamCredentia
 	return s.credentialsClient
 }
 
-// GetCredential returns the credential data.
-func (s *ManagedControlPlaneScope) GetCredential() *Credential {
-	return s.credential
+// GetGcpServiceAccount returns the GCP service account.
+func (s *ManagedControlPlaneScope) GetGcpServiceAccount() string {
+	return s.GcpServiceAccount
 }
 
 // GetAllNodePools gets all node pools for the control plane.
